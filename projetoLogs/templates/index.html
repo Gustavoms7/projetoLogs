@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logs Processados</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <h1>Detector de Ameaças Cibernéticas</h1>
+    <form id="upload-form">
+        <label for="file">Selecione um arquivo de logs:</label>
+        <input type="file" id="file" name="file" required>
+        <button type="submit">Fazer Upload</button>
+    </form>
+    <p id="upload-status"></p>
+    <p>Total de logs processados: <span id="total-logs">0</span></p>
+
+    <!-- Filtros -->
+    <div id="filters">
+        <label for="method-filter">Método:</label>
+        <select id="method-filter">
+            <option value="">Todos</option>
+        </select>
+
+        <label for="status-filter">Status:</label>
+        <select id="status-filter">
+            <option value="">Todos</option>
+        </select>
+
+        <label for="suspect-filter">URL Suspeita:</label>
+        <select id="suspect-filter">
+            <option value="">Todos</option>
+        </select>
+
+        <label for="params-filter">Nº de Parâmetros:</label>
+        <select id="params-filter">
+            <option value="">Todos</option>
+        </select>
+    </div>
+
+    <!-- Tabela -->
+    <table>
+        <thead>
+            <tr>
+                <th>IP</th>
+                <th>Data/Hora</th>
+                <th>Método</th>
+                <th>URL</th>
+                <th>Status</th>
+                <th>Tamanho (Bytes)</th>
+                <th>Nº Parâmetros</th>
+                <th>URL Suspeita</th>
+            </tr>
+        </thead>
+        <tbody id="log-entries">
+        </tbody>
+    </table>
+
+    <script>
+        let allLogs = []; // Armazena todos os logs carregados
+
+        async function fetchLogs() {
+            try {
+                const response = await fetch('/api/logs');
+                if (!response.ok) {
+                    console.error("Erro na API:", response.statusText);
+                    return;
+                }
+                const logs = await response.json();
+                allLogs = logs; // Salva todos os logs para filtragem
+                populateFilters(logs);
+                renderLogs(logs);
+            } catch (error) {
+                console.error("Erro ao buscar logs:", error);
+            }
+        }
+
+        function populateFilters(logs) {
+            // Preencher filtros com valores únicos dos logs
+            const methods = [...new Set(logs.map(log => log.metodo))];
+            const statuses = [...new Set(logs.map(log => log.status))];
+            const suspects = [...new Set(logs.map(log => log.url_suspeita))];
+            const params = [...new Set(logs.map(log => log.num_parametros))];
+
+            populateFilter('method-filter', methods);
+            populateFilter('status-filter', statuses);
+            populateFilter('suspect-filter', suspects.map(s => s ? 'Sim' : 'Não'));
+            populateFilter('params-filter', params.sort((a, b) => a - b));
+        }
+
+        function populateFilter(filterId, options) {
+            const filter = document.getElementById(filterId);
+            filter.innerHTML = '<option value="">Todos</option>'; // Limpa e adiciona "Todos"
+            options.forEach(option => {
+                const value = option.toString();
+                const display = option === true ? 'Sim' : option === false ? 'Não' : value;
+                filter.innerHTML += `<option value="${value}">${display}</option>`;
+            });
+        }
+
+        function renderLogs(logs) {
+            const logEntries = document.getElementById('log-entries');
+            const totalLogs = document.getElementById('total-logs');
+            totalLogs.textContent = logs.length;
+
+            logEntries.innerHTML = ''; // Limpa a tabela
+            logs.forEach(log => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${log.ip}</td>
+                    <td>${log.datahora}</td>
+                    <td>${log.metodo}</td>
+                    <td>${log.url}</td>
+                    <td>${log.status}</td>
+                    <td>${log.tamanho}</td>
+                    <td>${log.num_parametros}</td>
+                    <td>${log.url_suspeita ? "Sim" : "Não"}</td>
+                `;
+                logEntries.appendChild(row);
+            });
+        }
+
+        function applyFilters() {
+            let filteredLogs = [...allLogs]; // Copia os logs originais para aplicar filtros
+
+            // Filtro por método
+            const methodFilter = document.getElementById('method-filter').value;
+            if (methodFilter) {
+                filteredLogs = filteredLogs.filter(log => log.metodo === methodFilter);
+            }
+
+            // Filtro por status
+            const statusFilter = document.getElementById('status-filter').value;
+            if (statusFilter) {
+                filteredLogs = filteredLogs.filter(log => log.status == statusFilter);
+            }
+
+            // Filtro por URL suspeita
+            const suspectFilter = document.getElementById('suspect-filter').value;
+            if (suspectFilter) {
+                const isSuspect = suspectFilter === "Sim";
+                filteredLogs = filteredLogs.filter(log => log.url_suspeita === isSuspect);
+            }
+
+            // Filtro por número de parâmetros
+            const paramsFilter = document.getElementById('params-filter').value;
+            if (paramsFilter) {
+                filteredLogs = filteredLogs.filter(log => log.num_parametros == paramsFilter);
+            }
+
+            renderLogs(filteredLogs); // Atualiza a tabela com os logs filtrados
+        }
+
+        document.getElementById('upload-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const fileInput = document.getElementById('file');
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                const statusMessage = document.getElementById('upload-status');
+
+                if (response.ok) {
+                    statusMessage.textContent = result.message;
+                    statusMessage.style.color = "green";
+                    fetchLogs();
+                } else {
+                    statusMessage.textContent = result.message;
+                    statusMessage.style.color = "red";
+                }
+            } catch (error) {
+                console.error("Erro ao fazer upload:", error);
+            }
+        });
+
+        // Adiciona eventos para os filtros
+        document.getElementById('method-filter').addEventListener('change', applyFilters);
+        document.getElementById('status-filter').addEventListener('change', applyFilters);
+        document.getElementById('suspect-filter').addEventListener('change', applyFilters);
+        document.getElementById('params-filter').addEventListener('change', applyFilters);
+
+        fetchLogs();
+    </script>
+</body>
+</html>
