@@ -1,5 +1,9 @@
 
 # Projeto de Monitoramento e Visualização de Logs
+Autores: 
+- Alexandre Santarossa
+- Gustavo Mendes 
+- Kevin Shinohara
 
 Este projeto processa e visualiza logs de servidores web, com funcionalidades de análise e identificação de padrões suspeitos.
 
